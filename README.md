@@ -84,3 +84,20 @@ VZ-Tool cannot grant access outside iOS's app sandbox, provide unrestricted root
 ## License
 
 MIT. See LICENSE.
+
+
+---
+
+## SHADOWPHISH LAB v2 — Defensive phishing analysis
+
+VZ-Tool now includes **SHADOWPHISH LAB**, an offline URL and email-header triage module for Kali Linux. It supports explainable URL indicators, local header analysis for From/Reply-To and Return-Path mismatches and SPF/DKIM/DMARC results, plus JSON/CSV exports.
+
+~~~bash
+python3 shadowphish.py scan-url 'https://example.org/account/verify'
+python3 shadowphish.py scan-file urls.txt --csv batch.csv
+python3 shadowphish.py scan-headers sample-headers.txt --json headers.json
+python3 -m unittest -v test_shadowphish.py
+~~~
+
+The URL analyzer does not fetch targets; email analysis is based only on locally supplied header text. The awareness page is loopback-only and ignores submitted form values. Full guide: [SHADOWPHISH.md](SHADOWPHISH.md).
+
