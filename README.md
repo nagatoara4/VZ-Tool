@@ -1,4 +1,4 @@
-# VZ-Tool
+# VZ-Tool for ish arm64 git cloner
 
 **GitHub project cloner and iSH compatibility assistant for iPhone.**
 
