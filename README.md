@@ -1,171 +1,86 @@
-# SHADOWPHISH LAB
-### Defensive phishing triage + privacy-first awareness simulation for Kali Linux
+# VZ-Tool
 
-<p align="center">
-  <strong>Inspect suspicious URLs locally. Run a safe awareness exercise. Export JSON reports.</strong>
-</p>
+**GitHub project cloner and iSH compatibility assistant for iPhone.**
 
-<p align="center">
-  <img alt="Python" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white">
-  <img alt="Dependencies" src="https://img.shields.io/badge/dependencies-standard%20library-2ea44f">
-  <img alt="Platform" src="https://img.shields.io/badge/platform-Kali%20Linux%20%7C%20Linux-black">
-  <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
-</p>
+VZ-Tool helps iSH Shell users clone GitHub repositories, inspect project types, identify common Linux/system assumptions that may not work on iOS, and review likely setup commands before executing them.
 
-SHADOWPHISH LAB is an auditable security-awareness toolkit for students, analysts, and blue teams. It combines a local URL heuristic analyzer with a loopback-only training page. It does not fetch submitted URLs, harvest credentials, or transmit form data.
-
-> [!IMPORTANT]
-> This is a defensive training project, not a credential-harvesting framework. The training server accepts only loopback bind addresses, ignores submitted form bodies, and suppresses access logs. Never enter real credentials into a training page.
+> **Honest promise:** no tool can make every GitHub project run on iSH. iSH provides an Alpine Linux userland with kernel, privilege, architecture, and package limitations. VZ-Tool helps classify and prepare projects; it cannot turn iOS into an unrestricted Linux machine or grant real kernel root access.
 
 ## Features
 
-- **Offline URL triage:** no requests to target hosts or reputation APIs.
-- **Explainable findings:** HTTP, embedded user-info, IP-literal hosts, punycode, deep subdomains, known shorteners, suspicious terms, and non-standard ports.
-- **JSON reporting:** single-URL and batch reports.
-- **Local awareness exercise:** generic training page on 127.0.0.1 by default.
-- **Privacy by design:** POST body is never read; submitted values are not logged or saved.
-- **No third-party dependencies:** Python standard library only.
-- **Unit tests:** key detection logic and loopback guard.
+- Clone GitHub repositories without overwriting an existing destination.
+- Detect common Python, Node.js, Rust, Go, Ruby, PHP, Java, C/C++, and shell manifests.
+- Flag common blockers: Docker/Podman, systemd, non-Alpine package managers, kernel modules, privileged networking, and hardware-specific dependencies.
+- Generate human-readable or JSON compatibility reports.
+- Suggest setup commands without running them automatically.
+- Optional explicit setup execution with an interactive confirmation; refuses ambiguous multi-command execution.
+- Python standard library only; no third-party Python packages required.
 
-## Project layout
+## Install in iSH
 
-~~~text
-VZ-Tool/
-├── shadowphish.py
-├── test_shadowphish.py
-├── requirements.txt
-├── LICENSE
-└── README.md
-~~~
+    apk update
+    apk add python3 py3-pip git
 
-## Requirements
+    git clone https://github.com/nagatoara4/VZ-Tool.git
+    cd VZ-Tool
+    python3 vztool.py --help
 
-- Kali Linux or another Linux distribution
-- Python 3.10+
-- Terminal access
+## Commands
 
-Check Python:
+### Clone a repository
 
-~~~bash
-python3 --version
-~~~
+    python3 vztool.py clone https://github.com/OWNER/PROJECT.git
+    python3 vztool.py clone https://github.com/OWNER/PROJECT.git --dir my-project
 
-## Installation
+The destination must not already exist. VZ-Tool refuses to overwrite it. HTTPS cloning is restricted to github.com; SSH URLs are accepted if SSH is configured.
 
-~~~bash
-git clone https://github.com/nagatoara4/VZ-Tool.git
-cd VZ-Tool
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-~~~
+### Analyze a project
 
-No external packages are needed. On a minimal Kali installation:
+    cd PROJECT
+    python3 /path/to/VZ-Tool/vztool.py analyze .
+    python3 /path/to/VZ-Tool/vztool.py analyze . --json
 
-~~~bash
-sudo apt update
-sudo apt install -y python3 python3-venv
-~~~
+Reports detected manifests, likely compatibility, blocker patterns, and platform limitations. This is a heuristic—not a sandbox, security audit, or guarantee of successful execution.
 
-## Quick start
+### Prepare setup
 
-### 1. Analyze one URL
+    python3 /path/to/VZ-Tool/vztool.py prepare .
 
-~~~bash
-python3 shadowphish.py scan-url 'https://example.org/account/verify'
-~~~
+This shows likely commands but does not execute them. To request execution for one unambiguous command:
 
-The JSON result contains a score, risk band, timestamp, findings, and a note that the URL was not fetched.
+    python3 /path/to/VZ-Tool/vztool.py prepare . --execute
 
-Save a report:
+VZ-Tool asks for confirmation. Review the project's README, dependency manifests, and scripts before approving commands from an unfamiliar repository.
 
-~~~bash
-python3 shadowphish.py scan-url 'http://192.0.2.1/login' --json report.json
-cat report.json
-~~~
+## Compatibility reality check
 
-### 2. Batch analysis
+| Project/dependency | Likely iSH situation |
+|---|---|
+| Pure Python | Often the best starting point if dependencies support the environment |
+| Shell scripts | May work after checking shell and command assumptions |
+| Node.js, Rust, Go, C/C++ | Depends on runtime/compiler/package availability and native dependencies |
+| Docker/Podman | Container engine and kernel capabilities generally unavailable in iSH |
+| systemd/services | Not provided like a conventional Linux host |
+| kernel modules, mount, privileged firewall tools | iOS/iSH does not grant unrestricted host-kernel access |
+| x86_64 prebuilt binaries | ARM64 hardware does not make x86_64 binaries runnable |
+| Windows executables, Android APKs, desktop GUI applications | Not directly runnable as ordinary iSH commands |
 
-Create a file with one URL per line. Blank lines and lines beginning with # are ignored.
+## Security principles
 
-~~~bash
-cat > urls.txt <<'EOF'
-https://example.org/
-http://192.0.2.1/login
-https://trusted.example@evil.example/
-https://xn--example-ova.test/
-EOF
+- Clone/analyze does not execute project scripts.
+- Existing directories are never overwritten by the clone command.
+- Setup execution is opt-in and requires confirmation.
+- Never put access tokens in clone URLs or commit secrets to Git.
+- Review dependencies and install scripts before running them.
 
-python3 shadowphish.py scan-file urls.txt --json batch-report.json
-~~~
+## What VZ-Tool cannot do
 
-### 3. Run the awareness exercise
+VZ-Tool cannot grant access outside iOS's app sandbox, provide unrestricted root, install a custom Linux kernel, emulate every CPU architecture, add Docker/systemd/kernel modules, or guarantee every repository can be ported. Some projects require manual code changes or a full Linux VM/host. iSH is useful for lightweight shell, Git, and Python experiments, but it is not equivalent to a full Linux VM.
 
-~~~bash
-python3 shadowphish.py serve-training
-~~~
+## Tests
 
-Open **http://127.0.0.1:8080/** on the same machine. Stop with Ctrl+C.
-
-The server rejects non-loopback addresses such as 0.0.0.0. The page is clearly labeled as a training simulation. The form has no field names; the server does not read the request body, and default access logging is disabled.
-
-## Run tests
-
-~~~bash
-python3 -m unittest -v test_shadowphish.py
-~~~
-
-## How scoring works
-
-The score is a heuristic triage indicator, not a probability that a URL is malicious.
-
-| Signal | Reason | Weight |
-|---|---|---:|
-| HTTP scheme | No TLS protection | 10 |
-| IP-literal host | Destination is an IP address | 25 |
-| User-info field | Text before @ can disguise the host | 30 |
-| Punycode hostname | Possible IDN lookalike needs inspection | 20 |
-| Many hostname labels | Domain boundary may be confusing | 10 |
-| Known URL shortener | Final destination is obscured | 15 |
-| Suspicious terms | Urgent account-related wording | 10 |
-| Non-standard port | Web service uses an unusual port | 10 |
-
-Weights are added and capped at 100. Risk labels are low (0–24), medium (25–49), and high (50–100). Signals can produce false positives or miss sophisticated threats. Inspect the registered domain, context, sender, redirects, and independent threat intelligence where appropriate.
-
-## Design and safety notes
-
-- **No URL fetching:** URL parsing and string heuristics only.
-- **No credential collection:** the training endpoint ignores submitted form values.
-- **Loopback-only:** public/interface bind addresses are rejected.
-- **No stealth, persistence, evasion, or third-party impersonation.**
-- **No guaranteed verdict:** not a replacement for a browser, sandbox, mail gateway, or threat-intelligence platform.
-
-## Troubleshooting
-
-**Python is missing:** install it with the Kali command above.
-
-**Port already in use:** choose another local port, for example:
-
-~~~bash
-python3 shadowphish.py serve-training --port 8090
-~~~
-
-**Loopback safety guard:** use the default 127.0.0.1 host; the restriction is intentional.
-
-**A URL is flagged but seems legitimate:** review each finding. The tool reports signals, not a definitive malicious verdict.
-
-## Roadmap
-
-- CSV report export
-- Configurable local allow/deny patterns
-- Mail-header triage helpers
-- SARIF-style export for pipeline integration
-- Additional malformed and internationalized URL tests
-
-## Responsible use
-
-Use this project for awareness training, defensive analysis, and controlled lab learning. Do not use it to collect credentials, impersonate third-party services, or target people without permission.
+    python3 -m unittest -v
 
 ## License
 
-MIT — see LICENSE.
+MIT. See LICENSE.
