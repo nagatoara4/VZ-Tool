@@ -11,20 +11,18 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Optional
 from urllib.parse import urlparse
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 MAX_FILE_BYTES = 256_000
 MAX_SCANNED_FILES = 5_000
 SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "target", "dist", "__pycache__", ".tox"}
 
 MANIFESTS = {
     "Python": ["pyproject.toml", "requirements.txt", "setup.py", "Pipfile"],
-    "Node.js": ["package.json"],
-    "Rust": ["Cargo.toml"],
-    "Go": ["go.mod"],
-    "Ruby": ["Gemfile"],
-    "PHP": ["composer.json"],
+    "Node.js": ["package.json"], "Rust": ["Cargo.toml"], "Go": ["go.mod"],
+    "Ruby": ["Gemfile"], "PHP": ["composer.json"],
     "Java": ["pom.xml", "build.gradle", "build.gradle.kts"],
     "C/C++": ["Makefile", "CMakeLists.txt"],
     "Shell": ["install.sh", "run.sh", "setup.sh"],
@@ -45,7 +43,17 @@ GITHUB_SCP = re.compile(r"^git@github\.com:([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(
 REPO_PART = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 
-def run(command: list[str], cwd: Path | None = None) -> str:
+def positive_int(value: str) -> int:
+    try:
+        number = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be an integer") from exc
+    if number < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return number
+
+
+def run(command: list, cwd: Optional[Path] = None) -> str:
     """Run a command without shell interpolation and return combined output."""
     try:
         result = subprocess.run(
@@ -54,13 +62,13 @@ def run(command: list[str], cwd: Path | None = None) -> str:
         )
         return result.stdout.strip()
     except FileNotFoundError as exc:
-        raise RuntimeError(f"Required command not found: {command[0]}") from exc
+        raise RuntimeError("Required command not found: " + command[0]) from exc
     except subprocess.CalledProcessError as exc:
-        raise RuntimeError(exc.stdout.strip() or f"Command failed: {command[0]}") from exc
+        raise RuntimeError(exc.stdout.strip() or "Command failed: " + command[0]) from exc
 
 
 def validate_github_url(url: str) -> str:
-    """Accept only standard GitHub HTTPS or SSH repository URL forms."""
+    """Accept standard GitHub HTTPS and SSH repository URL forms."""
     if not isinstance(url, str) or not url or any(ch.isspace() for ch in url):
         raise ValueError("Repository URL is empty or contains whitespace.")
     if GITHUB_SCP.fullmatch(url):
@@ -73,7 +81,7 @@ def validate_github_url(url: str) -> str:
             raise ValueError("Repository URLs must not contain query strings or fragments.")
         parts = parsed.path.strip("/").split("/")
         if len(parts) != 2 or not all(REPO_PART.fullmatch(part.removesuffix(".git")) for part in parts):
-            raise ValueError("Expected a GitHub repository URL like https://github.com/OWNER/REPO.git")
+            raise ValueError("Expected https://github.com/OWNER/REPO.git")
         return url
     if parsed.scheme == "ssh":
         if parsed.hostname != "github.com" or parsed.username != "git" or parsed.password:
@@ -82,12 +90,12 @@ def validate_github_url(url: str) -> str:
             raise ValueError("Repository URLs must not contain query strings or fragments.")
         parts = parsed.path.strip("/").split("/")
         if len(parts) != 2 or not all(REPO_PART.fullmatch(part.removesuffix(".git")) for part in parts):
-            raise ValueError("Expected an SSH GitHub repository URL.")
+            raise ValueError("Expected ssh://git@github.com/OWNER/REPO.git")
         return url
     raise ValueError("Use a GitHub HTTPS URL, git@github.com:OWNER/REPO.git, or ssh://git@github.com/OWNER/REPO.git.")
 
 
-def _manifest_report(path: Path) -> list[dict]:
+def _manifest_report(path: Path) -> list:
     detected = []
     for kind, filenames in MANIFESTS.items():
         matches = [name for name in filenames if (path / name).is_file()]
@@ -98,10 +106,8 @@ def _manifest_report(path: Path) -> list[dict]:
 
 def analyze(path: Path) -> dict:
     """Inspect manifests and selected compatibility/risk patterns without executing code."""
-    detected = _manifest_report(path)
-    blockers, risk_flags = [], []
-    scanned = 0
-    truncated = False
+    detected, blockers, risk_flags = _manifest_report(path), [], []
+    scanned, truncated = 0, False
     for base, dirs, files in os.walk(path):
         dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS)
         for filename in sorted(files):
@@ -124,28 +130,19 @@ def analyze(path: Path) -> dict:
             for pattern, reason in RISK_PATTERNS:
                 match = re.search(pattern, content, re.I)
                 if match:
-                    line = content.count("\n", 0, match.start()) + 1
-                    risk_flags.append({"file": relative, "line": line, "reason": reason})
+                    risk_flags.append({"file": relative, "line": content.count("\n", 0, match.start()) + 1, "reason": reason})
                     break
         if truncated:
             break
-
-    has_python_or_shell = any(item["kind"] in ("Python", "Shell") for item in detected)
+    likely = any(item["kind"] in ("Python", "Shell") for item in detected)
     return {
-        "tool": "VZ-Tool",
-        "version": VERSION,
-        "project": path.name or str(path),
-        "path": str(path.resolve()),
+        "tool": "VZ-Tool", "version": VERSION,
+        "project": path.name or str(path), "path": str(path.resolve()),
         "detected": detected,
-        "compatibility_estimate": "promising starting point" if has_python_or_shell else ("manual review needed" if detected else "unknown"),
-        "blockers": blockers,
-        "risk_flags": risk_flags,
+        "compatibility_estimate": "promising starting point" if likely else ("manual review needed" if detected else "unknown"),
+        "blockers": blockers, "risk_flags": risk_flags,
         "scan": {"files_examined": min(scanned, MAX_SCANNED_FILES), "truncated": truncated},
-        "platform": {
-            "system": platform.system(),
-            "machine": platform.machine(),
-            "python": platform.python_version(),
-        },
+        "platform": {"system": platform.system(), "machine": platform.machine(), "python": platform.python_version()},
         "limitations": [
             "Analysis is heuristic and does not execute or certify project code.",
             "Standard iSH emulates a 32-bit x86 Linux userland; iPhone host architecture does not imply native ARM64 Linux support.",
@@ -157,12 +154,9 @@ def analyze(path: Path) -> dict:
 def doctor() -> dict:
     commands = {name: shutil.which(name) for name in ("python3", "git", "pip3", "apk", "ssh", "npm", "make")}
     return {
-        "tool": "VZ-Tool",
-        "version": VERSION,
-        "python": sys.version.split()[0],
+        "tool": "VZ-Tool", "version": VERSION, "python": platform.python_version(),
         "platform": {"system": platform.system(), "machine": platform.machine()},
-        "commands": commands,
-        "clone_ready": bool(commands["git"]),
+        "commands": commands, "clone_ready": bool(commands["git"]),
         "notes": [
             "Standard iSH emulates a 32-bit x86 Linux userland; it is not native ARM64 Linux.",
             "Install only packages available for your iSH environment with apk.",
@@ -173,39 +167,32 @@ def doctor() -> dict:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="vztool",
-        description="Clone GitHub repositories and triage project compatibility for iSH.",
+        prog="vztool", description="Clone GitHub repositories and triage project compatibility for iSH.",
         epilog="VZ-Tool cannot guarantee that arbitrary projects run in iSH.",
     )
     parser.add_argument("--version", action="version", version=VERSION)
     sub = parser.add_subparsers(dest="command", required=True)
-
     clone = sub.add_parser("clone", help="clone a GitHub repository")
     clone.add_argument("url", help="GitHub HTTPS or SSH repository URL")
     clone.add_argument("--dir", help="destination directory (must not already exist)")
     clone.add_argument("--branch", help="branch, tag, or remote ref to check out")
-    clone.add_argument("--depth", type=int, help="optional positive shallow-clone depth")
+    clone.add_argument("--depth", type=positive_int, help="optional positive shallow-clone depth")
     clone.add_argument("--recursive", action="store_true", help="initialize submodules recursively")
-
     scan = sub.add_parser("analyze", help="inspect a local project without executing it")
     scan.add_argument("path", nargs="?", default=".")
     scan.add_argument("--json", action="store_true", help="print the complete JSON report")
-
     sub.add_parser("doctor", help="check local command availability and iSH constraints")
-
     prepare = sub.add_parser("prepare", help="suggest setup commands for a local project")
     prepare.add_argument("path", nargs="?", default=".")
-    prepare.add_argument("--execute", action="store_true", help="request execution after an interactive confirmation")
+    prepare.add_argument("--execute", action="store_true", help="request execution after interactive confirmation")
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: Optional[list] = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         if args.command == "clone":
             url = validate_github_url(args.url)
-            if args.depth is not None and args.depth < 1:
-                raise ValueError("--depth must be a positive integer.")
             if not shutil.which("git"):
                 raise RuntimeError("git is missing. In iSH try: apk update && apk add git")
             repo_name = url.rstrip("/").rsplit("/", 1)[-1].removesuffix(".git")
@@ -213,7 +200,7 @@ def main(argv: list[str] | None = None) -> int:
                 repo_name = repo_name.rsplit(":", 1)[-1].removesuffix(".git")
             destination = Path(args.dir or repo_name).expanduser()
             if destination.exists():
-                raise RuntimeError(f"Destination already exists: {destination}. Refusing to overwrite it.")
+                raise RuntimeError("Destination already exists: " + str(destination) + ". Refusing to overwrite it.")
             if destination.name in ("", ".", ".."):
                 raise ValueError("Choose a valid destination directory.")
             command = ["git", "clone"]
@@ -227,8 +214,8 @@ def main(argv: list[str] | None = None) -> int:
             output = run(command)
             if output:
                 print(output)
-            print(f"\nClone complete: {destination}")
-            print(f"Next step: python3 vztool.py analyze {destination}")
+            print("\nClone complete: " + str(destination))
+            print("Next step: python3 vztool.py analyze " + str(destination))
             return 0
 
         if args.command == "doctor":
@@ -238,25 +225,24 @@ def main(argv: list[str] | None = None) -> int:
 
         path = Path(args.path).expanduser()
         if not path.is_dir():
-            raise ValueError(f"Not a directory: {path}")
-
+            raise ValueError("Not a directory: " + str(path))
         if args.command == "analyze":
             report = analyze(path)
             if args.json:
                 print(json.dumps(report, indent=2))
             else:
-                print(f"VZ-TOOL {VERSION} | {report['project']}")
-                print(f"Compatibility estimate: {report['compatibility_estimate']}")
+                print("VZ-TOOL " + VERSION + " | " + report["project"])
+                print("Compatibility estimate: " + report["compatibility_estimate"])
                 print("Detected:", ", ".join(item["kind"] for item in report["detected"]) or "no known manifest")
-                print(f"Files examined: {report['scan']['files_examined']}" + (" (scan capped)" if report["scan"]["truncated"] else ""))
+                print("Files examined: " + str(report["scan"]["files_examined"]) + (" (scan capped)" if report["scan"]["truncated"] else ""))
                 print("\nPlatform blockers:")
                 for item in report["blockers"]:
-                    print(f"  - {item['file']}: {item['reason']}")
+                    print("  - " + item["file"] + ": " + item["reason"])
                 if not report["blockers"]:
-                    print("  - No known blocker patterns found.")
+                    print("  - No configured blocker patterns found.")
                 print("\nReview flags:")
                 for item in report["risk_flags"]:
-                    print(f"  - {item['file']}:{item['line']}: {item['reason']}")
+                    print("  - " + item["file"] + ":" + str(item["line"]) + ": " + item["reason"])
                 if not report["risk_flags"]:
                     print("  - No configured patterns found; this is not proof of safety.")
                 for note in report["limitations"]:
@@ -276,13 +262,13 @@ def main(argv: list[str] | None = None) -> int:
             print("No default setup command detected. Review the project's documentation and scripts manually.")
             return 0
         for index, (label, command) in enumerate(choices, 1):
-            print(f"{index}. {label}: {' '.join(command)} (not run)")
+            print(str(index) + ". " + label + ": " + " ".join(command) + " (not run)")
         print("Review upstream scripts before approving setup; dependency installation may execute third-party code.")
         if args.execute:
             if len(choices) != 1:
                 raise RuntimeError("Multiple commands detected; refusing ambiguous execution.")
             label, command = choices[0]
-            if input(f"Execute {label} in {path.resolve()}? [y/N] ").strip().lower() != "y":
+            if input("Execute " + label + " in " + str(path.resolve()) + "? [y/N] ").strip().lower() != "y":
                 print("Cancelled.")
                 return 0
             output = run(command, cwd=path)
@@ -290,7 +276,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(output)
         return 0
     except (OSError, ValueError, RuntimeError) as exc:
-        print(f"vztool: error: {exc}", file=sys.stderr)
+        print("vztool: error: " + str(exc), file=sys.stderr)
         return 2
 
 

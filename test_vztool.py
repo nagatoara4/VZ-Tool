@@ -7,22 +7,16 @@ import vztool
 
 class URLValidationTests(unittest.TestCase):
     def test_github_https_url(self):
-        self.assertEqual(
-            vztool.validate_github_url("https://github.com/example/project.git"),
-            "https://github.com/example/project.git",
-        )
+        self.assertEqual(vztool.validate_github_url("https://github.com/example/project.git"),
+                         "https://github.com/example/project.git")
 
     def test_github_ssh_scp_style(self):
-        self.assertEqual(
-            vztool.validate_github_url("git@github.com:example/project.git"),
-            "git@github.com:example/project.git",
-        )
+        self.assertEqual(vztool.validate_github_url("git@github.com:example/project.git"),
+                         "git@github.com:example/project.git")
 
     def test_github_ssh_scheme(self):
-        self.assertEqual(
-            vztool.validate_github_url("ssh://git@github.com/example/project.git"),
-            "ssh://git@github.com/example/project.git",
-        )
+        self.assertEqual(vztool.validate_github_url("ssh://git@github.com/example/project.git"),
+                         "ssh://git@github.com/example/project.git")
 
     def test_rejects_external_https_host(self):
         with self.assertRaises(ValueError):
@@ -80,15 +74,18 @@ class AnalysisTests(unittest.TestCase):
 
 
 class CLIArgumentTests(unittest.TestCase):
-    def test_help_parser_builds(self):
-        parser = vztool.build_parser()
-        parsed = parser.parse_args(["clone", "https://github.com/example/project.git", "--depth", "1"])
-        self.assertEqual(parsed.command, "clone")
-        self.assertEqual(parsed.depth, 1)
+    def test_parser_accepts_positive_depth(self):
+        args = vztool.build_parser().parse_args(
+            ["clone", "https://github.com/example/project.git", "--depth", "1"])
+        self.assertEqual(args.depth, 1)
 
-    def test_rejects_nonpositive_depth(self):
+    def test_parser_rejects_nonpositive_depth(self):
         with self.assertRaises(SystemExit):
-            vztool.build_parser().parse_args(["clone", "https://github.com/example/project.git", "--depth", "0"])
+            vztool.build_parser().parse_args(
+                ["clone", "https://github.com/example/project.git", "--depth", "0"])
+
+    def test_version_is_current(self):
+        self.assertEqual(vztool.VERSION, "0.2.1")
 
 
 if __name__ == "__main__":
