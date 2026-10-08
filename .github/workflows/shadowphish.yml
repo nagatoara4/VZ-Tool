@@ -1,0 +1,17 @@
+name: SHADOWPHISH checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run unit tests
+        run: python -m unittest -v test_shadowphish.py
+      - name: Check CLI help
+        run: python shadowphish.py --help
