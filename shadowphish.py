@@ -97,14 +97,14 @@ def run_training_server(host,port):
     print(f"[SHADOWPHISH] Awareness exercise: http://{host}:{port}/")
     print("[SHADOWPHISH] Loopback only; submitted values are ignored. Ctrl+C to stop.")
     try: server.serve_forever()
-    except KeyboardInterrupt: print("\\n[SHADOWPHISH] Stopping.")
+    except KeyboardInterrupt: print("\n[SHADOWPHISH] Stopping.")
     finally: server.server_close()
 
 def write_reports(reports,path,fmt):
     path=Path(path)
     if fmt=="json":
         payload=reports[0] if len(reports)==1 else {"tool":"SHADOWPHISH LAB","count":len(reports),"reports":reports}
-        path.write_text(json.dumps(payload,indent=2,ensure_ascii=False)+"\\n",encoding="utf-8"); return
+        path.write_text(json.dumps(payload,indent=2,ensure_ascii=False)+"\n",encoding="utf-8"); return
     with path.open("w",newline="",encoding="utf-8") as handle:
         fields=["input_type","input","risk_score","risk_level","finding_count","finding_ids","generated_at"]
         writer=csv.DictWriter(handle,fieldnames=fields); writer.writeheader()
