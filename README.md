@@ -1,103 +1,128 @@
-# VZ-Tool for ish arm64 git cloner
+# VZ-Tool
 
-**GitHub project cloner and iSH compatibility assistant for iPhone.**
+**A GitHub project cloner and compatibility assistant for iSH on iPhone.**
 
-VZ-Tool helps iSH Shell users clone GitHub repositories, inspect project types, identify common Linux/system assumptions that may not work on iOS, and review likely setup commands before executing them.
+VZ-Tool helps you bring public GitHub projects into your iSH workspace, inspect their structure, identify common platform blockers, and review likely setup steps before running them.
 
-> **Honest promise:** no tool can make every GitHub project run on iSH. iSH provides an Alpine Linux userland with kernel, privilege, architecture, and package limitations. VZ-Tool helps classify and prepare projects; it cannot turn iOS into an unrestricted Linux machine or grant real kernel root access.
+It is designed for practical mobile development—not to promise impossible compatibility.
 
-## Features
+> **Platform note:** the standard iSH app uses an Alpine Linux userland and emulates a 32-bit x86 Linux environment. An ARM64 iPhone does not mean standard iSH runs native ARM64 Linux binaries. iSH is also constrained by iOS sandboxing and does not provide unrestricted host-root or kernel access. See the [official iSH project](https://github.com/ish-app/ish).
 
-- Clone GitHub repositories without overwriting an existing destination.
-- Detect common Python, Node.js, Rust, Go, Ruby, PHP, Java, C/C++, and shell manifests.
-- Flag common blockers: Docker/Podman, systemd, non-Alpine package managers, kernel modules, privileged networking, and hardware-specific dependencies.
-- Generate human-readable or JSON compatibility reports.
-- Suggest setup commands without running them automatically.
-- Optional explicit setup execution with an interactive confirmation; refuses ambiguous multi-command execution.
-- Python standard library only; no third-party Python packages required.
+## Highlights
 
-## Install in iSH
+- **GitHub cloning:** HTTPS and SSH GitHub repository URLs, optional branch selection, shallow clones, and recursive submodules.
+- **Project inspection:** detect common manifests for Python, Node.js, Rust, Go, Ruby, PHP, Java, C/C++, and shell projects.
+- **Compatibility triage:** flag common assumptions such as Docker, systemd, non-Alpine package managers, kernel modules, privileged networking, and architecture-specific dependencies.
+- **Supply-chain warnings:** identify a small set of risky installation patterns for manual review; findings are indicators, not proof of malicious behavior.
+- **Machine-readable reports:** export analysis as JSON for scripts or further review.
+- **Conservative setup assistance:** print likely setup commands first. Execution is opt-in, confirmed interactively, and blocked when multiple candidate commands make the choice ambiguous.
+- **No Python dependencies:** VZ-Tool uses the Python standard library. Git is required for cloning.
 
-    apk update
-    apk add python3 py3-pip git
+## Install
 
-    git clone https://github.com/nagatoara4/VZ-Tool.git
-    cd VZ-Tool
-    python3 vztool.py --help
+In iSH, install the available packages:
 
-## Commands
+```sh
+apk update
+apk add python3 git
+```
 
-### Clone a repository
+Clone VZ-Tool and open its directory:
 
-    python3 vztool.py clone https://github.com/OWNER/PROJECT.git
-    python3 vztool.py clone https://github.com/OWNER/PROJECT.git --dir my-project
+```sh
+git clone https://github.com/nagatoara4/VZ-Tool.git
+cd VZ-Tool
+python3 vztool.py --help
+```
 
-The destination must not already exist. VZ-Tool refuses to overwrite it. HTTPS cloning is restricted to github.com; SSH URLs are accepted if SSH is configured.
+## Quick start
 
-### Analyze a project
+### 1. Clone a project
 
-    cd PROJECT
-    python3 /path/to/VZ-Tool/vztool.py analyze .
-    python3 /path/to/VZ-Tool/vztool.py analyze . --json
+```sh
+python3 vztool.py clone https://github.com/OWNER/PROJECT.git
+```
 
-Reports detected manifests, likely compatibility, blocker patterns, and platform limitations. This is a heuristic—not a sandbox, security audit, or guarantee of successful execution.
+Choose a directory name, branch, or shallow clone when needed:
 
-### Prepare setup
+```sh
+python3 vztool.py clone https://github.com/OWNER/PROJECT.git --dir my-project
+python3 vztool.py clone https://github.com/OWNER/PROJECT.git --branch main
+python3 vztool.py clone https://github.com/OWNER/PROJECT.git --depth 1
+python3 vztool.py clone https://github.com/OWNER/PROJECT.git --recursive
+```
 
-    python3 /path/to/VZ-Tool/vztool.py prepare .
+VZ-Tool refuses to clone into an existing destination. HTTPS and SSH URLs must point to GitHub; SSH cloning requires a working SSH key/configuration. Private repositories require credentials already configured with Git—never paste tokens into URLs or source files.
 
-This shows likely commands but does not execute them. To request execution for one unambiguous command:
+### 2. Check the environment
 
-    python3 /path/to/VZ-Tool/vztool.py prepare . --execute
+```sh
+python3 vztool.py doctor
+```
 
-VZ-Tool asks for confirmation. Review the project's README, dependency manifests, and scripts before approving commands from an unfamiliar repository.
+This reports available local commands and explains relevant iSH constraints. It does not install packages or change system settings.
 
-## Compatibility reality check
+### 3. Analyze a project
 
-| Project/dependency | Likely iSH situation |
+```sh
+python3 vztool.py analyze my-project
+python3 vztool.py analyze my-project --json
+```
+
+The report includes detected manifests, platform details, likely compatibility concerns, and review flags. Analysis is local and does not execute the project's scripts.
+
+### 4. Review setup suggestions
+
+```sh
+python3 vztool.py prepare my-project
+```
+
+Commands are suggestions only. To request execution for a single unambiguous detected command:
+
+```sh
+python3 vztool.py prepare my-project --execute
+```
+
+VZ-Tool asks for interactive confirmation. It refuses to choose automatically if several setup commands are detected. Review the project's README, dependency manifests, and scripts before approving any third-party command.
+
+## What may work in iSH?
+
+| Project type or dependency | Practical expectation |
 |---|---|
-| Pure Python | Often the best starting point if dependencies support the environment |
-| Shell scripts | May work after checking shell and command assumptions |
-| Node.js, Rust, Go, C/C++ | Depends on runtime/compiler/package availability and native dependencies |
-| Docker/Podman | Container engine and kernel capabilities generally unavailable in iSH |
-| systemd/services | Not provided like a conventional Linux host |
-| kernel modules, mount, privileged firewall tools | iOS/iSH does not grant unrestricted host-kernel access |
-| x86_64 prebuilt binaries | ARM64 hardware does not make x86_64 binaries runnable |
-| Windows executables, Android APKs, desktop GUI applications | Not directly runnable as ordinary iSH commands |
+| Pure Python | Often a good starting point if all dependencies support the environment |
+| Shell scripts | Depends on shell features and installed commands |
+| Node.js, Rust, Go, C/C++ | Depends on package availability, compiler/runtime support, and native dependencies |
+| Docker/Podman and systemd | Usually not available as they are on a conventional Linux host |
+| Kernel modules, privileged networking, mounts | Require capabilities standard iSH does not provide |
+| Prebuilt ARM64 or x86_64 Linux binaries | May not match standard iSH's emulated x86 32-bit environment |
+| Desktop GUI applications, Windows executables, Android APKs | Not directly runnable as ordinary iSH commands |
 
-## Security principles
+A compatibility score cannot be inferred reliably from a repository name alone. Some projects need manual porting; others require a full Linux VM or remote Linux host.
 
-- Clone/analyze does not execute project scripts.
-- Existing directories are never overwritten by the clone command.
-- Setup execution is opt-in and requires confirmation.
-- Never put access tokens in clone URLs or commit secrets to Git.
-- Review dependencies and install scripts before running them.
+## Security model
 
-## What VZ-Tool cannot do
-
-VZ-Tool cannot grant access outside iOS's app sandbox, provide unrestricted root, install a custom Linux kernel, emulate every CPU architecture, add Docker/systemd/kernel modules, or guarantee every repository can be ported. Some projects require manual code changes or a full Linux VM/host. iSH is useful for lightweight shell, Git, and Python experiments, but it is not equivalent to a full Linux VM.
+- Cloning and analysis do not execute project code.
+- Existing destination paths are not overwritten by the clone command.
+- Setup commands are displayed before execution.
+- Execution requires an explicit flag and interactive confirmation.
+- URL analysis is heuristic; it does not establish that a project is safe.
+- Keep Git credentials and API tokens out of command history, logs, source files, and commits.
+- Treat unfamiliar dependency install scripts as executable third-party code.
 
 ## Tests
 
-    python3 -m unittest -v
+Run the test suite with Python's built-in test runner:
+
+```sh
+python3 -m unittest -v
+```
+
+The repository also includes a GitHub Actions workflow that runs the unit tests on pushes and pull requests.
+
+## Scope and limitations
+
+VZ-Tool is a **cloner and triage assistant**, not a universal project converter, emulator, sandbox, or security certification tool. It cannot grant unrestricted root, escape iOS app sandboxing, add kernel features, make incompatible binaries executable, or guarantee that arbitrary repositories will run.
 
 ## License
 
-MIT. See LICENSE.
-
-
----
-
-## SHADOWPHISH LAB v2 — Defensive phishing analysis
-
-VZ-Tool now includes **SHADOWPHISH LAB**, an offline URL and email-header triage module for Kali Linux. It supports explainable URL indicators, local header analysis for From/Reply-To and Return-Path mismatches and SPF/DKIM/DMARC results, plus JSON/CSV exports.
-
-~~~bash
-python3 shadowphish.py scan-url 'https://example.org/account/verify'
-python3 shadowphish.py scan-file urls.txt --csv batch.csv
-python3 shadowphish.py scan-headers sample-headers.txt --json headers.json
-python3 -m unittest -v test_shadowphish.py
-~~~
-
-The URL analyzer does not fetch targets; email analysis is based only on locally supplied header text. The awareness page is loopback-only and ignores submitted form values. Full guide: [SHADOWPHISH.md](SHADOWPHISH.md).
-
+MIT. See [LICENSE](LICENSE).
