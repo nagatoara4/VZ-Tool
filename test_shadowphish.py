@@ -24,13 +24,13 @@ class UrlTests(unittest.TestCase):
 
 class HeaderTests(unittest.TestCase):
     def test_reply_to_mismatch(self):
-        r=analyze_email_headers("From: Billing <billing@example.com>\\nReply-To: help@attacker.test\\nDate: Thu, 1 Jan 2026 00:00:00 +0000\\n")
+        r=analyze_email_headers("From: Billing <billing@example.com>\nReply-To: help@attacker.test\nDate: Thu, 1 Jan 2026 00:00:00 +0000\n")
         self.assertIn("reply_to_domain_mismatch",{x["id"] for x in r["findings"]})
     def test_authentication_failures(self):
-        r=analyze_email_headers("From: a@example.com\\nAuthentication-Results: mx; spf=fail; dkim=pass; dmarc=fail\\n")
+        r=analyze_email_headers("From: a@example.com\nAuthentication-Results: mx; spf=fail; dkim=pass; dmarc=fail\n")
         ids={x["id"] for x in r["findings"]}; self.assertIn("spf_failure",ids); self.assertIn("dmarc_failure",ids)
     def test_missing_auth_is_flagged(self):
-        self.assertIn("missing_auth_results",{x["id"] for x in analyze_email_headers("From: a@example.com\\n")["findings"]})
+        self.assertIn("missing_auth_results",{x["id"] for x in analyze_email_headers("From: a@example.com\n")["findings"]})
     def test_csv_export(self):
         with tempfile.TemporaryDirectory() as d:
             path=Path(d)/"report.csv"; write_reports([analyze_url("https://example.org")],path,"csv")
